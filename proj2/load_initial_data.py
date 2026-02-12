@@ -5,7 +5,7 @@ CSV数据加载脚本
 """
 
 import csv
-import psycopg2
+import  
 from datetime import datetime
 import time
 
