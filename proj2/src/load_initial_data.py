@@ -5,7 +5,8 @@ CSV数据加载脚本
 """
 
 import csv
-import  
+import os
+import psycopg2
 from datetime import datetime
 import time
 
@@ -48,10 +49,12 @@ def parse_date(date_str):
         # 尝试其他日期格式
         return datetime.strptime(date_str, "%d/%m/%Y").date()
 
-def load_employees_from_csv(csv_file='employees.csv'):
+def load_employees_from_csv(csv_file=None):
     """
     从CSV文件加载员工数据到源数据库
     """
+    if csv_file is None:
+        csv_file = os.path.join(os.path.dirname(__file__), "..", "data", "employees.csv")
     # 1. 等待数据库启动
     if not wait_for_database():
         return False

@@ -9,29 +9,36 @@
 
 ```
 proj2/
-├── README.md                    # 项目说明文档
-├── PROJECT_PLAN.md              # 本计划文档
-├── docker-compose.yml           # ✅ 已完成（需更新）
+├── docker-compose.yml           # ✅ Kafka + PostgreSQL
+├── requirements.txt             # ✅ Python依赖
+├── cdc_offset.txt               # Producer进度记录
 │
-├── SQL 初始化脚本/
-│   ├── init_source_db.sql       # 📝 待创建 - 源数据库初始化
-│   ├── init_target_db.sql       # 📝 待创建 - 目标数据库初始化
-│   └── load_initial_data.py     # 📝 待创建 - 加载 CSV 数据
+├── data/
+│   └── employees.csv            # ✅ 初始数据
 │
-├── Python 核心代码/
-│   ├── config.py                # 📝 待创建 - 配置管理
-│   ├── employee.py              # ⚠️ 需改进 - 数据模型
-│   ├── producer.py              # ⚠️ 需实现核心逻辑
-│   ├── consumer.py              # ⚠️ 需实现核心逻辑
-│   ├── admin.py                 # ✅ 已完成
-│   └── requirements.txt         # 📝 待创建
+├── sql/
+│   ├── init_source_db.sql       # ✅ 源数据库初始化
+│   └── init_target_db.sql       # ✅ 目标数据库初始化
 │
-├── 测试和验证/
-│   ├── test_cdc.py              # 📝 待创建 - CDC 功能测试
-│   └── verify_sync.py           # 📝 待创建 - 数据一致性验证
+├── src/
+│   ├── config.py                # ✅ 配置管理
+│   ├── employee.py              # ✅ 数据模型
+│   ├── producer.py              # ✅ Producer逻辑
+│   ├── consumer.py              # ✅ Consumer逻辑
+│   ├── admin.py                 # ✅ Kafka Admin
+│   ├── load_initial_data.py     # ✅ 加载CSV数据
+│   ├── test_cdc.py              # ✅ CDC功能测试
+│   └── verify_sync.py           # ✅ 数据一致性验证
 │
-└── 数据文件/
-    └── employees.csv            # ✅ 已完成
+├── scripts/
+│   ├── start_cdc.sh             # ✅ 启动脚本
+│   ├── stop_cdc.sh              # ✅ 停止脚本
+│   └── run_tests.sh             # ✅ 测试脚本
+│
+└── docs/
+  ├── PROJECT_PLAN.md          # 本计划文档
+  ├── SCRIPTS_GUIDE.md         # 脚本说明
+  └── tutor.md                 # 新手教程
 ```
 
 ---
@@ -42,7 +49,7 @@ proj2/
 
 **目标**：搭建两个独立的 PostgreSQL 数据库，并创建表结构和触发器
 
-#### 1.1 创建源数据库初始化脚本 `init_source_db.sql`
+#### 1.1 创建源数据库初始化脚本 `sql/init_source_db.sql`
 
 **内容**：
 - 创建 `employees` 表
@@ -101,7 +108,7 @@ proj2/
   FOR EACH ROW EXECUTE FUNCTION capture_employee_changes();
   ```
 
-#### 1.2 创建目标数据库初始化脚本 `init_target_db.sql`
+#### 1.2 创建目标数据库初始化脚本 `sql/init_target_db.sql`
 
 **内容**：
 - 创建 `employees` 表（结构同源库）
@@ -135,7 +142,7 @@ db_source:
     - '5432:5432'
   volumes:
     - db_source:/var/lib/bf_kafka_proj2_source/data
-    - ./init_source_db.sql:/docker-entrypoint-initdb.d/init.sql  # 新增
+    - ./sql/init_source_db.sql:/docker-entrypoint-initdb.d/init.sql  # 新增
 
 db_dst:
   image: postgres:14.1-alpine
@@ -147,10 +154,10 @@ db_dst:
     - '5433:5432'
   volumes:
     - db_dst:/var/lib/bf_kafka_proj2_dst/data
-    - ./init_target_db.sql:/docker-entrypoint-initdb.d/init.sql  # 新增
+    - ./sql/init_target_db.sql:/docker-entrypoint-initdb.d/init.sql  # 新增
 ```
 
-#### 1.4 创建数据加载脚本 `load_initial_data.py`
+#### 1.4 创建数据加载脚本 `src/load_initial_data.py`
 
 **功能**：读取 `employees.csv` 并插入到源数据库
 
@@ -311,27 +318,27 @@ psycopg2-binary==2.9.9
 
 3. 加载初始数据：
    ```bash
-   python load_initial_data.py
+  python3 src/load_initial_data.py
    ```
 
 4. 启动 Producer：
    ```bash
-   python producer.py
+  python3 src/producer.py
    ```
 
 5. 启动 Consumer（新终端）：
    ```bash
-   python consumer.py
+  python3 src/consumer.py
    ```
 
 6. 运行测试（新终端）：
    ```bash
-   python test_cdc.py
+  python3 src/test_cdc.py
    ```
 
 7. 验证结果：
    ```bash
-   python verify_sync.py
+  python3 src/verify_sync.py
    ```
 
 ---

@@ -7,12 +7,12 @@
 
 **基本用法：**
 ```bash
-./start_cdc.sh
+./scripts/start_cdc.sh
 ```
 
 **重置 offset 并启动：**
 ```bash
-./start_cdc.sh --reset
+./scripts/start_cdc.sh --reset
 ```
 
 **功能：**
@@ -30,12 +30,12 @@
 
 **基本用法：**
 ```bash
-./stop_cdc.sh
+./scripts/stop_cdc.sh
 ```
 
 **停止并显示日志：**
 ```bash
-./stop_cdc.sh --show-logs
+./scripts/stop_cdc.sh --show-logs
 ```
 
 **功能：**
@@ -51,7 +51,7 @@
 
 **用法：**
 ```bash
-./run_tests.sh
+./scripts/run_tests.sh
 ```
 
 **功能：**
@@ -74,17 +74,17 @@ docker compose up -d
 
 ### Step 2: 加载初始数据
 ```bash
-python3 load_initial_data.py
+python3 src/load_initial_data.py
 ```
 
 ### Step 3: 启动 CDC 系统
 ```bash
-./start_cdc.sh
+./scripts/start_cdc.sh
 ```
 
 ### Step 4: 运行测试
 ```bash
-./run_tests.sh
+./scripts/run_tests.sh
 ```
 
 ---
@@ -102,12 +102,12 @@ tail -f logs/consumer.log
 
 ### 手动验证数据同步
 ```bash
-python3 verify_sync.py
+python3 src/verify_sync.py
 ```
 
 ### 手动运行功能测试
 ```bash
-python3 test_cdc.py
+python3 src/test_cdc.py
 ```
 
 ### 检查进程状态
@@ -167,9 +167,9 @@ python3 -c "import psycopg2; psycopg2.connect(host='localhost', port=5433, user=
 psql -h localhost -p 5432 -U postgres -c "SELECT * FROM emp_cdc;"
 
 # 2. 重置 offset 并重启
-./stop_cdc.sh
+./scripts/stop_cdc.sh
 rm -f cdc_offset.txt
-./start_cdc.sh
+./scripts/start_cdc.sh
 
 # 3. 检查 DLQ（可能是验证失败）
 python3 -c "
@@ -187,7 +187,7 @@ for row in rows:
 ### 问题 4：完全重置系统
 ```bash
 # 停止所有服务
-./stop_cdc.sh
+./scripts/stop_cdc.sh
 docker compose down -v
 
 # 清理文件
@@ -197,8 +197,8 @@ rm -f logs/*.log
 # 重新启动
 docker compose up -d
 sleep 30
-python3 load_initial_data.py
-./start_cdc.sh --reset
+python3 src/load_initial_data.py
+./scripts/start_cdc.sh --reset
 ```
 
 ---
@@ -207,16 +207,27 @@ python3 load_initial_data.py
 
 ```
 proj2/
-├── start_cdc.sh          # 启动脚本
-├── stop_cdc.sh           # 停止脚本
-├── run_tests.sh          # 测试脚本
-├── producer.py           # CDC Producer
-├── consumer.py           # CDC Consumer
-├── config.py             # 配置文件
-├── employee.py           # 数据模型
-├── load_initial_data.py  # 数据加载工具
-├── verify_sync.py        # 同步验证工具
-├── test_cdc.py           # 功能测试套件
+├── scripts/
+│   ├── start_cdc.sh          # 启动脚本
+│   ├── stop_cdc.sh           # 停止脚本
+│   └── run_tests.sh          # 测试脚本
+├── src/
+│   ├── producer.py           # CDC Producer
+│   ├── consumer.py           # CDC Consumer
+│   ├── config.py             # 配置文件
+│   ├── employee.py           # 数据模型
+│   ├── load_initial_data.py  # 数据加载工具
+│   ├── verify_sync.py        # 同步验证工具
+│   └── test_cdc.py           # 功能测试套件
+├── sql/
+│   ├── init_source_db.sql    # 源数据库初始化
+│   └── init_target_db.sql    # 目标数据库初始化
+├── data/
+│   └── employees.csv         # 初始数据
+├── docs/
+│   ├── PROJECT_PLAN.md       # 项目计划
+│   ├── SCRIPTS_GUIDE.md       # 脚本说明
+│   └── tutor.md              # 新手教程
 ├── logs/                 # 日志目录
 │   ├── producer.log
 │   └── consumer.log
@@ -228,10 +239,10 @@ proj2/
 
 ## 💡 提示
 
-1. **首次运行**：使用 `./start_cdc.sh --reset` 确保从头开始处理
+1. **首次运行**：使用 `./scripts/start_cdc.sh --reset` 确保从头开始处理
 2. **调试模式**：查看实时日志 `tail -f logs/*.log`
-3. **性能监控**：使用 `run_tests.sh` 定期检查系统健康
-4. **数据验证**：每次修改后运行 `python3 verify_sync.py`
+3. **性能监控**：使用 `./scripts/run_tests.sh` 定期检查系统健康
+4. **数据验证**：每次修改后运行 `python3 src/verify_sync.py`
 
 ---
 

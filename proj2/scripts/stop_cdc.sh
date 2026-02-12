@@ -8,9 +8,10 @@ echo "║         Stopping Kafka CDC System              ║"
 echo "╚════════════════════════════════════════════════╝"
 echo ""
 
-# 获取脚本所在目录
+# 获取项目根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # 从 PID 文件读取进程 ID
 if [ -f .producer.pid ]; then
@@ -76,7 +77,7 @@ if [ "$1" = "--show-logs" ]; then
 fi
 
 echo "💡 Tips:"
-echo "   - To restart: ./start_cdc.sh"
-echo "   - To reset offset: ./start_cdc.sh --reset"
-echo "   - To view logs: ./stop_cdc.sh --show-logs"
+echo "   - To restart: ./scripts/start_cdc.sh"
+echo "   - To reset offset: ./scripts/start_cdc.sh --reset"
+echo "   - To view logs: ./scripts/stop_cdc.sh --show-logs"
 echo ""

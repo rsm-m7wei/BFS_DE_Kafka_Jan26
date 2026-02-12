@@ -10,9 +10,10 @@ echo "║  Starting Producer and Consumer...             ║"
 echo "╚════════════════════════════════════════════════╝"
 echo ""
 
-# 获取脚本所在目录
+# 获取项目根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # 检查 Docker 容器是否运行
 echo "🔍 Checking Docker containers..."
@@ -25,7 +26,7 @@ echo "✅ Docker containers are running"
 echo ""
 
 # 检查必要的文件是否存在
-required_files=("producer.py" "consumer.py" "config.py" "employee.py")
+required_files=("src/producer.py" "src/consumer.py" "src/config.py" "src/employee.py")
 for file in "${required_files[@]}"; do
     if [ ! -f "$file" ]; then
         echo "❌ Required file not found: $file"
@@ -53,7 +54,7 @@ fi
 
 # 启动 Producer
 echo "🚀 Starting Producer..."
-nohup python3 producer.py > logs/producer.log 2>&1 &
+nohup python3 src/producer.py > logs/producer.log 2>&1 &
 PRODUCER_PID=$!
 echo "✅ Producer started (PID: $PRODUCER_PID)"
 sleep 2
@@ -66,7 +67,7 @@ fi
 
 # 启动 Consumer
 echo "🚀 Starting Consumer..."
-nohup python3 consumer.py > logs/consumer.log 2>&1 &
+nohup python3 src/consumer.py > logs/consumer.log 2>&1 &
 CONSUMER_PID=$!
 echo "✅ Consumer started (PID: $CONSUMER_PID)"
 sleep 2
@@ -95,7 +96,7 @@ echo "   Producer: tail -f logs/producer.log"
 echo "   Consumer: tail -f logs/consumer.log"
 echo ""
 echo "🛑 To stop the system:"
-echo "   ./stop_cdc.sh"
+echo "   ./scripts/stop_cdc.sh"
 echo ""
 
 # 等待系统稳定
@@ -121,7 +122,7 @@ read -p "📊 Run data verification now? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo ""
-    python3 verify_sync.py
+    python3 src/verify_sync.py
 fi
 
 echo ""

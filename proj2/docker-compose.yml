@@ -21,6 +21,16 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_MIN_INSYNC_REPLICAS: 1
+      # ============ Log Compaction 优化 ============
+      # 主题默认清理策略：delete（按时间/大小删除）→ compact（仅保留每个key的最新值）
+      KAFKA_LOG_CLEANUP_POLICY: delete
+      # 日志保留时间（7天）
+      KAFKA_LOG_RETENTION_HOURS: 168
+      # ============ Consumer EOS 安全配置 ============
+      # Min ISR = 1（当前单副本环境）；生产应该 >= 2
+      KAFKA_MIN_ISR: 1
+      # 确保写入副本后才返回ACK（与MIN_ISR配合保证可靠性）
+      KAFKA_DEFAULT_MIN_INSYNC_REPLICAS: 1
 
   # Simple topic setup - runs once and exits
   kafka-setup:
@@ -33,10 +43,16 @@ services:
         sleep 10
         
         echo 'Creating topics...'
+        # Main CDC topic: 3 partitions (ensures ordering per employee)
         kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --partitions 3 --replication-factor 1 --topic bf_employee_cdc
+        # DLQ topic: 1 partition (for failed messages)
         kafka-topics --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic bf_employee_cdc_dlq
         
-        echo 'Topics created!'
+        # Enable Log Compaction on main CDC topic (keeps latest value per key)
+        echo 'Enabling Log Compaction on bf_employee_cdc...'
+        kafka-configs --bootstrap-server kafka:9092 --entity-type topics --entity-name bf_employee_cdc --alter --add-config cleanup.policy=compact,min.cleanable.dirty.ratio=0.1,delete.retention.ms=86400000
+        
+        echo 'Topics created with Log Compaction enabled!'
         kafka-topics --list --bootstrap-server kafka:9092
       "
     restart: "no"
@@ -51,7 +67,7 @@ services:
       - '5432:5432'
     volumes:
       - db_source:/var/lib/bf_kafka_proj2_source/data
-      - ./init_source_db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/init_source_db.sql:/docker-entrypoint-initdb.d/init.sql
 
   db_dst:
     image: postgres:14.1-alpine
@@ -63,7 +79,7 @@ services:
       - '5433:5432'
     volumes:
       - db_dst:/var/lib/bf_kafka_proj2_dst/data
-      - ./init_target_db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/init_target_db.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   db_source:

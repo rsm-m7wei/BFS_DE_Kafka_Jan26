@@ -10,9 +10,10 @@ echo "║  Running comprehensive tests...                ║"
 echo "╚════════════════════════════════════════════════╝"
 echo ""
 
-# 获取脚本所在目录
+# 获取项目根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # 颜色定义
 GREEN='\033[0;32m'
@@ -45,7 +46,7 @@ if [ "$PRODUCER_RUNNING" = false ] || [ "$CONSUMER_RUNNING" = false ]; then
     read -p "Start the system now? (y/n): " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        ./start_cdc.sh --reset
+        ./scripts/start_cdc.sh --reset
         echo ""
         echo "⏳ Waiting 10 seconds for system to stabilize..."
         sleep 10
@@ -59,7 +60,7 @@ echo ""
 echo "════════════════════════════════════════"
 echo "  Step 2: Data Synchronization Verification"
 echo "════════════════════════════════════════"
-python3 verify_sync.py
+python3 src/verify_sync.py
 
 echo ""
 read -p "Press Enter to continue with functional tests..."
@@ -68,7 +69,7 @@ echo ""
 echo "════════════════════════════════════════"
 echo "  Step 3: Running Functional Tests"
 echo "════════════════════════════════════════"
-python3 test_cdc.py
+python3 src/test_cdc.py
 
 echo ""
 echo "════════════════════════════════════════"

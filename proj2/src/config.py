@@ -41,6 +41,25 @@ KAFKA_TOPIC_DLQ = 'bf_employee_cdc_dlq'       # 死信队列主题（验证失�
 # 为什么需要？同一个组内的多个Consumer会分担消息，避免重复消费
 CONSUMER_GROUP_ID = 'bf_cdc_consumer'
 
+# ============ EOS（Exactly Once Semantics）配置 ============
+# 启用幂等性 Producer（Kafka 1.0+ 自动启用）
+ENABLE_IDEMPOTENT_PRODUCER = True
+
+# Consumer EOS 模式
+# isolation.level 决定消费者能看到的消息:
+# - 'read_uncommitted': 看所有消息（可能看到未提交的）- 低延迟
+# - 'read_committed': 仅看已提交的消息 - 高可靠性（推荐CDC使用）
+EOS_ISOLATION_LEVEL = 'read_committed'
+
+# 自动提交配置
+# 改为 False 时，需要手动调用 commit() 以实现原子性
+# True: 自动提交（简单但不原子 - 消息处理中宕机会丢失）
+# False: 手动提交（原子操作 - insert + offset commit 一起成功或都失败）
+ENABLE_AUTO_COMMIT = False
+
+# 自动提交间隔（仅当 ENABLE_AUTO_COMMIT=True 时有效）
+AUTO_COMMIT_INTERVAL_MS = 5000
+
 # ============================================
 # CDC Producer 配置
 # ============================================

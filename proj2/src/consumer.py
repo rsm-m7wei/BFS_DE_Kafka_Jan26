@@ -35,7 +35,10 @@ try:
         DB_TARGET_CONFIG,
         KAFKA_BOOTSTRAP_SERVERS,
         KAFKA_TOPIC_CDC,
-        CONSUMER_GROUP_ID
+        CONSUMER_GROUP_ID,
+        EOS_ISOLATION_LEVEL,
+        ENABLE_AUTO_COMMIT,
+        AUTO_COMMIT_INTERVAL_MS
     )
 except ImportError:
     # 如果没有config.py，使用默认值
@@ -50,6 +53,9 @@ except ImportError:
     KAFKA_BOOTSTRAP_SERVERS = 'localhost:29092'
     KAFKA_TOPIC_CDC = 'bf_employee_cdc'
     CONSUMER_GROUP_ID = 'bf_cdc_consumer'
+    EOS_ISOLATION_LEVEL = 'read_committed'
+    ENABLE_AUTO_COMMIT = False
+    AUTO_COMMIT_INTERVAL_MS = 5000
 
 # 主题名称
 employee_topic_name = KAFKA_TOPIC_CDC
@@ -77,15 +83,24 @@ class cdcConsumer(Consumer):
                       - 同一组内的Consumer会负载均衡
                       - 不同组的Consumer各自独立消费所有消息
         
-        关键配置：
-        - enable.auto.commit: 自动提交offset（简化代码）
+        关键配置（EOS - Exactly Once Semantics）：
+        - isolation.level: read_committed - 仅读已提交消息（确保一致性）
+        - enable.auto.commit: False - 禁用自动提交，改为手动提交（原子性）
         - auto.offset.reset: earliest - 从最早的消息开始（确保不漏）
+        
+        EOS 原理：
+        1. 消息处理（INSERT/UPDATE/DELETE）
+        2. 若成功：commit() 原子提交 offset + 消息处理
+        3. 若失败：rollback()，offset 不变，消息重新消费
         """
         self.conf = {
             'bootstrap.servers': f'{host}:{port}',
             'group.id': group_id,
-            'enable.auto.commit': True,  # 自动提交offset
-            'auto.offset.reset': 'earliest'  # 从最早的未消费消息开始
+            'enable.auto.commit': ENABLE_AUTO_COMMIT,  # 禁用自动提交 → 手动提交 = 原子性
+            'auto.offset.reset': 'earliest',  # 从最早的未消费消息开始
+            'isolation.level': EOS_ISOLATION_LEVEL,  # read_committed = 仅读已提交的消息
+            'max.poll.interval.ms': 300000,  # 处理消息超时（5分钟）
+            'session.timeout.ms': 30000,  # 会话超时（30秒）
         }
         
         # 调用父类初始化
@@ -172,6 +187,17 @@ class cdcConsumer(Consumer):
                         # 数据无效，发送到DLQ
                         print(f"⚠️  Validation failed for emp_id={employee.emp_id}: {error_msg}")
                         self.send_to_dlq(employee, error_msg, json_str)
+                    
+                    # ============ EOS：处理完成后手动提交 offset ============
+                    # 这样做的优点：
+                    # 1. 消息处理 + offset 提交是原子的（一起成功或都失败）
+                    # 2. 如果处理中宕机，offset 不会提交，重启后会重新消费这条消息
+                    # 3. 实现"恰好一次"语义，避免消息丢失或重复
+                    try:
+                        self.commit(asynchronous=False)  # 同步提交（确保成功）
+                    except KafkaException as e:
+                        print(f"❌ Commit failed: {e}")
+                        self.total_errors += 1
                     
                     # 每100条打印一次统计
                     if self.total_processed % 100 == 0:

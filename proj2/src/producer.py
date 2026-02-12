@@ -87,9 +87,17 @@ class cdcProducer(Producer):
         self.port = port
         
         # Kafka Producer配置
+        # ============ EOS（Exactly Once Semantics）配置 ============
         producerConfig = {
             'bootstrap.servers': f"{self.host}:{self.port}",
-            'acks': 'all'  # 等待所有副本确认（最安全）
+            'acks': 'all',  # 等待所有副本确认（最安全）
+            # --------- Idempotent Producer 配置 ---------
+            # 原理：即使消息重复发送，Kafka也能自动去重不提次
+            'enable.idempotence': True,  # 启用幂等性 Producer（Kafka 1.0+默认）
+            'max.in.flight.requests.per.connection': 5,  # 不声明地发送的请求数
+            'linger.ms': 10,  # 批量发送：每10ms或积攒100条消息一起发送（改善吞吐量）
+            'batch.size': 16384,  # 批次大小27KB（默认16KB）
+            'compression.type': 'snappy',  # 使用Snappy压缩（减少带宽流量）
         }
         
         # 调用父类（Producer）的初始化
@@ -291,6 +299,7 @@ class cdcProducer(Producer):
                         # produce()是异步的，不会阻塞
                         self.produce(
                             topic=employee_topic_name,
+                            key=str(employee.emp_id).encode('utf-8'),
                             value=json_str.encode('utf-8'),  # Kafka需要bytes
                             callback=self.delivery_callback  # 发送完成后调用
                         )

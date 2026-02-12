@@ -36,6 +36,36 @@ def wait_for_sync(seconds=2):
     time.sleep(seconds)
 
 
+def wait_for_employee(db_config, emp_id, exists=True, timeout=12, interval=1):
+    """
+    轮询等待员工记录出现或消失
+    """
+    attempts = int(timeout / interval)
+    last_row = None
+    for _ in range(attempts):
+        last_row = get_employee_by_id(db_config, emp_id)
+        if exists and last_row is not None:
+            return last_row
+        if not exists and last_row is None:
+            return None
+        time.sleep(interval)
+    return last_row
+
+
+def wait_for_employee_fields(db_config, emp_id, expected_city, expected_salary, timeout=12, interval=1):
+    """
+    轮询等待指定字段更新到目标值
+    """
+    attempts = int(timeout / interval)
+    last_row = None
+    for _ in range(attempts):
+        last_row = get_employee_by_id(db_config, emp_id)
+        if last_row and last_row[4] == expected_city and last_row[5] == expected_salary:
+            return last_row
+        time.sleep(interval)
+    return last_row
+
+
 def get_employee_count(db_config, table='employees'):
     """获取员工数量"""
     try:
@@ -75,7 +105,7 @@ def test_insert():
     print("  TEST 1: INSERT Operation")
     print("="*60)
     
-    emp_id = 1000
+    emp_id = 1001
     first_name = "Alice"
     last_name = "Test"
     dob = "2015-06-15"
@@ -83,6 +113,21 @@ def test_insert():
     salary = 75000
     
     try:
+        # 清理旧数据，避免主键冲突
+        conn = psycopg2.connect(**DB_TARGET_CONFIG)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM employees WHERE emp_id = %s", (emp_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        conn = psycopg2.connect(**DB_SOURCE_CONFIG)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM employees WHERE emp_id = %s", (emp_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
         # 在源库插入
         conn = psycopg2.connect(**DB_SOURCE_CONFIG)
         cur = conn.cursor()
@@ -99,10 +144,10 @@ def test_insert():
         print(f"✅ Inserted into source database: emp_id={emp_id}, name={first_name} {last_name}")
         
         # 等待同步
-        wait_for_sync(3)
+        wait_for_sync(2)
         
-        # 验证目标库
-        target_emp = get_employee_by_id(DB_TARGET_CONFIG, emp_id)
+        # 验证目标库（轮询等待）
+        target_emp = wait_for_employee(DB_TARGET_CONFIG, emp_id, exists=True)
         
         if target_emp:
             print(f"✅ Found in target database: {target_emp}")
@@ -127,15 +172,37 @@ def test_update():
     print("  TEST 2: UPDATE Operation")
     print("="*60)
     
-    emp_id = 1000
+    emp_id = 1002
     new_salary = 85000
     new_city = "UpdatedCity"
     
     try:
+        # 确保记录存在（先插入）
+        conn = psycopg2.connect(**DB_SOURCE_CONFIG)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO employees (emp_id, first_name, last_name, dob, city, salary)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (emp_id) DO UPDATE SET
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                dob = EXCLUDED.dob,
+                city = EXCLUDED.city,
+                salary = EXCLUDED.salary
+            """,
+            (emp_id, "Update", "User", "2015-01-01", "InitCity", 70000)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # 等待初始同步
+        wait_for_employee(DB_TARGET_CONFIG, emp_id, exists=True)
+
         # 更新源库
         conn = psycopg2.connect(**DB_SOURCE_CONFIG)
         cur = conn.cursor()
-        
         sql = "UPDATE employees SET salary = %s, city = %s WHERE emp_id = %s"
         cur.execute(sql, (new_salary, new_city, emp_id))
         conn.commit()
@@ -145,12 +212,12 @@ def test_update():
         print(f"✅ Updated in source database: emp_id={emp_id}, new_salary={new_salary}, new_city={new_city}")
         
         # 等待同步
-        wait_for_sync(3)
+        wait_for_sync(2)
         
-        # 验证目标库
-        target_emp = get_employee_by_id(DB_TARGET_CONFIG, emp_id)
+        # 验证目标库（轮询等待字段更新）
+        target_emp = wait_for_employee_fields(DB_TARGET_CONFIG, emp_id, new_city, new_salary)
         
-        if target_emp and target_emp[6] == new_salary and target_emp[5] == new_city:
+        if target_emp and target_emp[5] == new_salary and target_emp[4] == new_city:
             print(f"✅ Update synced to target: {target_emp}")
             print("🎉 UPDATE test PASSED!")
             return True
@@ -173,9 +240,32 @@ def test_delete():
     print("  TEST 3: DELETE Operation")
     print("="*60)
     
-    emp_id = 1000
+    emp_id = 1003
     
     try:
+        # 确保记录存在（先插入）
+        conn = psycopg2.connect(**DB_SOURCE_CONFIG)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO employees (emp_id, first_name, last_name, dob, city, salary)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (emp_id) DO UPDATE SET
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                dob = EXCLUDED.dob,
+                city = EXCLUDED.city,
+                salary = EXCLUDED.salary
+            """,
+            (emp_id, "Delete", "User", "2015-01-01", "InitCity", 70000)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # 等待初始同步
+        wait_for_employee(DB_TARGET_CONFIG, emp_id, exists=True)
+
         # 删除源库记录
         conn = psycopg2.connect(**DB_SOURCE_CONFIG)
         cur = conn.cursor()
@@ -189,10 +279,10 @@ def test_delete():
         print(f"✅ Deleted from source database: emp_id={emp_id}")
         
         # 等待同步
-        wait_for_sync(3)
+        wait_for_sync(2)
         
-        # 验证目标库
-        target_emp = get_employee_by_id(DB_TARGET_CONFIG, emp_id)
+        # 验证目标库（轮询等待）
+        target_emp = wait_for_employee(DB_TARGET_CONFIG, emp_id, exists=False)
         
         if target_emp is None:
             print(f"✅ Record deleted from target database")
@@ -225,6 +315,22 @@ def test_dlq():
     salary = 5000  # ❌ 低于最低要求10000
     
     try:
+        # 清理目标库中旧的DLQ记录，避免误判
+        conn = psycopg2.connect(**DB_TARGET_CONFIG)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM emp_cdc_dlq WHERE emp_id = %s", (emp_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # 确保源库中没有重复 emp_id
+        conn = psycopg2.connect(**DB_SOURCE_CONFIG)
+        cur = conn.cursor()
+        cur.execute("DELETE FROM employees WHERE emp_id = %s", (emp_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
         # 在源库插入无效数据
         conn = psycopg2.connect(**DB_SOURCE_CONFIG)
         cur = conn.cursor()
@@ -241,18 +347,23 @@ def test_dlq():
         print(f"✅ Inserted invalid data into source: emp_id={emp_id}, salary={salary}")
         
         # 等待同步
-        wait_for_sync(3)
+        wait_for_sync(2)
         
         # 验证目标库（应该不存在）
-        target_emp = get_employee_by_id(DB_TARGET_CONFIG, emp_id)
+        target_emp = wait_for_employee(DB_TARGET_CONFIG, emp_id, exists=False)
         
-        # 检查DLQ表
-        conn = psycopg2.connect(**DB_TARGET_CONFIG)
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM emp_cdc_dlq WHERE emp_id = %s", (emp_id,))
-        dlq_record = cur.fetchone()
-        cur.close()
-        conn.close()
+        # 检查DLQ表（轮询等待）
+        dlq_record = None
+        for _ in range(12):
+            conn = psycopg2.connect(**DB_TARGET_CONFIG)
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM emp_cdc_dlq WHERE emp_id = %s", (emp_id,))
+            dlq_record = cur.fetchone()
+            cur.close()
+            conn.close()
+            if dlq_record is not None:
+                break
+            time.sleep(1)
         
         if target_emp is None and dlq_record is not None:
             print(f"✅ Invalid data NOT in target database")
