@@ -1,0 +1,12 @@
+flowchart TD
+  A[启动环境\nproj2/docker-compose.yml] --> B[初始化数据库\nproj2/sql/init_source_db.sql\nproj2/sql/init_target_db.sql]
+  B --> C[导入初始数据\nproj2/src/load_initial_data.py\nproj2/data/employees.csv]
+  C --> D[启动CDC\nproj2/scripts/start_cdc.sh]
+  D --> E[Producer读取CDC并发送Kafka\nproj2/src/producer.py]
+  E --> F[Kafka主题\nbf_employee_cdc]
+  F --> G[Consumer消费并写入目标库或DLQ\nproj2/src/consumer.py]
+  G --> H[DLQ表\nemp_cdc_dlq]
+  D --> I[运行测试\nproj2/scripts/run_tests.sh]
+  I --> J[功能测试\nproj2/src/test_cdc.py]
+  I --> K[同步校验\nproj2/src/verify_sync.py]
+  D --> L[停止CDC\nproj2/scripts/stop_cdc.sh]
